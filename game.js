@@ -6,7 +6,7 @@
  *  - SCENE:      tre scener: TITLE, PLAY, GAMEOVER (med pos-score-feiring).
  *  - ENTITIES:   spiller (gorilla + human-rytter), elefanter, t-rex-boss, pickups,
  *                fotballer, partikler. Alle tegnes med fillRect (Minecraft-blokk-stil).
- *  - CONTROLS:   touch + mus + tastatur. Tap=hopp, hold=lade punch, slipp=slå.
+ *  - CONTROLS:   touch + mus + tastatur. Tap=hopp, SLÅ-knapp eller X=slag.
  *  - RENDER:     bakgrunn (himmel, sol, fjell, skyer), bakke (gress/jord), HUD.
  *  - AUDIO:      WebAudio-beeps for jump/punch/pickup/boss/win. Stum-knapp i HUD.
  *  - LIFECYCLE:  requestAnimationFrame med fast dt-clamp. Ingen GC-churn i hot loop.
@@ -82,11 +82,11 @@
   // INPUT
   // -------------------------------------------------------------------------
   const input = {
-    pressed: false,        // finger/key currently down
+    pressed: false,        // finger/key currently down (jump-tap only now)
     pressStart: 0,         // ms when press began
     tapQueued: false,      // edge-trigger for jump
-    releaseQueued: false,  // edge-trigger for punch release
-    keyboardPunch: false   // X key state
+    punchQueued: false,    // edge-trigger for punch (set by SLÅ button or X key)
+    punchFlash: 0          // ms remaining of button-press flash for visual feedback
   };
 
   function pressBegin(t) {
@@ -96,8 +96,22 @@
     ensureAudio();
   }
   function pressEnd() {
-    if (input.pressed) input.releaseQueued = true;
     input.pressed = false;
+  }
+
+  // Bottom-right SLÅ button (always visible during PLAY). Big finger-target.
+  const PUNCH_BTN = { w: 72, h: 56 };
+  function punchBtnRect() {
+    return { x: W - PUNCH_BTN.w - 6, y: H - PUNCH_BTN.h - 6, w: PUNCH_BTN.w, h: PUNCH_BTN.h };
+  }
+  // Football kick button (only during arena) — bottom-LEFT now so it doesn't
+  // collide with the SLÅ button.
+  const KICK_BTN = { w: 60, h: 56 };
+  function kickBtnRect() {
+    return { x: 6, y: H - KICK_BTN.h - 6, w: KICK_BTN.w, h: KICK_BTN.h };
+  }
+  function pointInRect(px, py, r) {
+    return px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
   }
 
   // Touch
@@ -124,18 +138,20 @@
   });
   window.addEventListener('mouseup', () => pressEnd());
 
-  // Keyboard fallback: Space=jump, X=punch (hold), M=mute
+  // Keyboard fallback: Space=jump, X=punch (instant), M=mute
   window.addEventListener('keydown', (e) => {
     if (e.repeat) return;
     if (e.code === 'Space') { e.preventDefault(); pressBegin(performance.now()); }
-    else if (e.code === 'KeyX') { input.keyboardPunch = true; pressBegin(performance.now()); }
+    else if (e.code === 'KeyX') {
+      e.preventDefault();
+      input.punchQueued = true;
+      input.punchFlash = 0.12;
+      ensureAudio();
+    }
     else if (e.code === 'KeyM') { muted = !muted; }
   });
   window.addEventListener('keyup', (e) => {
-    if (e.code === 'Space' || e.code === 'KeyX') {
-      if (e.code === 'KeyX') input.keyboardPunch = false;
-      pressEnd();
-    }
+    if (e.code === 'Space') pressEnd();
   });
 
   function handleHudTap(lx, ly) {
@@ -149,8 +165,15 @@
       startGame();
       return true;
     }
-    // Football kick button (right side, only during arena)
-    if (state.footballTime > 0 && lx > W - 60 && lx < W - 4 && ly > H - 60 && ly < H - 4) {
+    // SLÅ punch button (bottom-right, always visible during play)
+    if (scene === 'PLAY' && pointInRect(lx, ly, punchBtnRect())) {
+      input.punchQueued = true;
+      input.punchFlash = 0.12;
+      ensureAudio();
+      return true;
+    }
+    // Football kick button (bottom-left, only during arena)
+    if (state.footballTime > 0 && pointInRect(lx, ly, kickBtnRect())) {
       kickFootball();
       return true;
     }
@@ -187,8 +210,7 @@
     onGround: true,
     jumpsLeft: 2,
     punching: 0,        // remaining seconds of punch swing
-    charging: false,
-    chargeT: 0,
+    punchCooldown: 0,   // seconds until next punch can fire
     facing: 1,
     runFrame: 0
   };
@@ -219,7 +241,7 @@
     state.cameraShake = 0;
     player.x = 80; player.y = GROUND_Y - 40;
     player.vy = 0; player.onGround = true; player.jumpsLeft = 2;
-    player.punching = 0; player.charging = false; player.chargeT = 0;
+    player.punching = 0; player.punchCooldown = 0;
     elephants.length = 0;
     pickups.length = 0;
     particles.length = 0;
@@ -326,7 +348,7 @@
       updateParticles(dt);
       // consume edge events to avoid carrying into the next scene
       input.tapQueued = false;
-      input.releaseQueued = false;
+      input.punchQueued = false;
       return;
     }
 
@@ -342,7 +364,7 @@
     state.scrollSpeed = baseSpeed * (state.superTime > 0 ? 1.6 : 1);
     state.scrollX += state.scrollSpeed * dt;
 
-    // ---- INPUT: jump on tap edge, punch on release edge ----
+    // ---- INPUT: jump on tap edge, punch on dedicated SLÅ-button ----
     if (input.tapQueued) {
       input.tapQueued = false;
       if (player.jumpsLeft > 0) {
@@ -352,26 +374,21 @@
         if (player.jumpsLeft === 1) sfx.jump(); else sfx.djump();
       }
     }
-    // While pressed, ramp charge after 0.3s
-    if (input.pressed) {
-      const heldMs = performance.now() - input.pressStart;
-      if (heldMs > 300) {
-        player.charging = true;
-        player.chargeT = Math.min(1, (heldMs - 300) / 600);
-      }
-    }
-    if (input.releaseQueued) {
-      input.releaseQueued = false;
-      if (player.charging) {
-        // Trigger punch
-        player.punching = 0.25;
-        player.charging = false;
-        player.chargeT = 0;
-        sfx.punch();
-        doPunch();
-      }
+    // Punch: instant on SLÅ-button tap (or X key). Cooldown prevents
+    // double-firing on the same finger-press but keeps mashing snappy.
+    if (player.punchCooldown > 0) player.punchCooldown -= dt;
+    if (input.punchQueued && player.punchCooldown <= 0) {
+      input.punchQueued = false;
+      player.punching = 0.15;
+      player.punchCooldown = 0.18;
+      sfx.punch();
+      doPunch();
+    } else if (input.punchQueued) {
+      // Drop the queue if we're still in cooldown so the next press is fresh
+      input.punchQueued = false;
     }
     if (player.punching > 0) player.punching -= dt;
+    if (input.punchFlash > 0) input.punchFlash -= dt;
 
     // ---- PHYSICS: gorilla gravity ----
     player.vy += 600 * dt;
@@ -765,13 +782,11 @@
     if (player.punching > 0) {
       px(x + 28, y + 14 + bob, 14, 8, palette.gorilla);    // extended arm
       px(x + 38, y + 12 + bob,  6, 12, palette.gorilla);   // fist
+      // bright impact spark at the fist
+      const spark = ((state.time * 24) | 0) % 2 === 0 ? '#ffeb3b' : '#ffffff';
+      px(x + 44, y + 10 + bob, 4, 4, spark);
+      px(x + 42, y + 16 + bob, 4, 4, spark);
       px(x - 4,  y + 16 + bob,  6, 14, palette.gorilla);
-    } else if (player.charging) {
-      // arm pulled back, glowing
-      px(x - 8, y + 14 + bob, 10, 10, palette.gorilla);
-      const glow = ((state.time * 12) | 0) % 2 === 0 ? '#ffeb3b' : '#ff8a65';
-      px(x - 10, y + 12 + bob, 4, 4, glow);
-      px(x + 26, y + 16 + bob, 6, 12, palette.gorilla);
     } else {
       const armSwing = player.onGround ? Math.sin(player.runFrame + Math.PI) * 2 : 0;
       px(x - 4, y + 16 + bob + armSwing,  6, 14, palette.gorilla);
@@ -951,15 +966,32 @@
     if (state.superTime > 0) {
       drawText('SUPER ' + state.superTime.toFixed(1), 130, H - 14, '#ff7eb6', 8);
     }
-    // Football arena timer
+    // Football arena timer (label) + kick button bottom-LEFT during arena
     if (state.footballTime > 0) {
-      drawText('FOTBALL ' + Math.ceil(state.footballTime) + 's', 220, H - 14, palette.white, 8);
-      // kick button
-      px(W - 60, H - 60, 56, 56, '#ffffffcc');
-      px(W - 56, H - 56, 48, 48, '#388e3c');
-      drawFootball(W - 32, H - 32, 12);
-      drawText('SPARK', W - 56, H - 18, palette.white, 7);
+      drawText('FOTBALL ' + Math.ceil(state.footballTime) + 's', 100, H - 14, palette.white, 8);
+      const kb = kickBtnRect();
+      px(kb.x, kb.y, kb.w, kb.h, '#ffffffcc');
+      px(kb.x + 4, kb.y + 4, kb.w - 8, kb.h - 8, '#388e3c');
+      drawFootball(kb.x + kb.w / 2, kb.y + 22, 12);
+      drawText('SPARK', kb.x + 12, kb.y + kb.h - 14, palette.white, 7);
     }
+
+    // SLÅ button bottom-RIGHT — always visible during PLAY. Big finger-target,
+    // bright color so it cannot be missed. Briefly flashes lighter on press.
+    {
+      const b = punchBtnRect();
+      const flashing = input.punchFlash > 0;
+      px(b.x, b.y, b.w, b.h, '#ffffffcc');
+      px(b.x + 4, b.y + 4, b.w - 8, b.h - 8, flashing ? '#ffb74d' : '#ef5350');
+      // fist icon (blocky)
+      const fx = b.x + b.w / 2 - 8;
+      const fy = b.y + 14;
+      px(fx,     fy,     16, 12, '#6d4c41');     // hand
+      px(fx + 2, fy + 2, 12,  4, '#8d6e63');     // knuckles highlight
+      px(fx + 4, fy + 8,  8,  2, '#3e2723');     // shadow
+      drawText('SLÅ', b.x + b.w / 2 - 10, b.y + b.h - 14, palette.white, 9);
+    }
+
     // Mute button (top-right)
     px(W - 28, 4, 24, 20, '#00000055');
     drawText(muted ? 'OFF' : 'LYD', W - 26, 8, '#ffffff', 7);
