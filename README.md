@@ -16,12 +16,12 @@ Et HTML5-spill laget til Emilian (6 ar) av Hermes-flaten.
 ### Kontroller (touch)
 - **Trykk en gang** — gorillaen hopper
 - **Trykk en gang til i lufta** — dobbelt-hopp
-- **Hold fingeren nede** (i 0,3 sek+) — lader et MEGA-SLAG. Slipp naer en elefant for a sla den vekk!
+- **SLA-knappen** nede til hoyre (alltid synlig) — trykk for a sla elefanter og T-rex vekk!
 - **LYD-knappen** oppe til hoyre — slar lyden av/pa
 
 ### Kontroller (datamaskin)
 - **Mellomrom** = hopp
-- **X** = hold for a sla
+- **X** = sla (trykk, ikke hold)
 - **M** = mute
 
 ### Hva du moter
