@@ -83,15 +83,13 @@
   // -------------------------------------------------------------------------
   const input = {
     pressed: false,        // finger/key currently down (jump-tap only now)
-    pressStart: 0,         // ms when press began
     tapQueued: false,      // edge-trigger for jump
     punchQueued: false,    // edge-trigger for punch (set by SLÅ button or X key)
     punchFlash: 0          // ms remaining of button-press flash for visual feedback
   };
 
-  function pressBegin(t) {
+  function pressBegin() {
     input.pressed = true;
-    input.pressStart = t;
     input.tapQueued = true;
     ensureAudio();
   }
@@ -123,7 +121,7 @@
     const lx = (t.clientX - rect.left) * (W / rect.width);
     const ly = (t.clientY - rect.top)  * (H / rect.height);
     if (handleHudTap(lx, ly)) return;
-    pressBegin(performance.now());
+    pressBegin();
   }, { passive: false });
   canvas.addEventListener('touchend', (e) => { e.preventDefault(); pressEnd(); }, { passive: false });
   canvas.addEventListener('touchcancel', (e) => { e.preventDefault(); pressEnd(); }, { passive: false });
@@ -134,14 +132,14 @@
     const lx = (e.clientX - rect.left) * (W / rect.width);
     const ly = (e.clientY - rect.top)  * (H / rect.height);
     if (handleHudTap(lx, ly)) return;
-    pressBegin(performance.now());
+    pressBegin();
   });
   window.addEventListener('mouseup', () => pressEnd());
 
   // Keyboard fallback: Space=jump, X=punch (instant), M=mute
   window.addEventListener('keydown', (e) => {
     if (e.repeat) return;
-    if (e.code === 'Space') { e.preventDefault(); pressBegin(performance.now()); }
+    if (e.code === 'Space') { e.preventDefault(); pressBegin(); }
     else if (e.code === 'KeyX') {
       e.preventDefault();
       input.punchQueued = true;
@@ -1015,7 +1013,7 @@
     ctx.fillRect(0, 0, W, H);
     drawTextCentered('GORILLA-RYTTER', 48, '#ffeb3b', 20);
     drawTextCentered('Trykk for a hoppe!', 100, palette.white, 10);
-    drawTextCentered('Hold for a slass!', 118, palette.white, 10);
+    drawTextCentered('Trykk SLÅ for a slass!', 118, palette.white, 10);
     drawTextCentered('Samle kokos og pannekaker!', 140, palette.white, 8);
     // pulsing
     const pulse = ((state.time * 2) | 0) % 2 === 0 ? '#ffffff' : '#ffeb3b';
