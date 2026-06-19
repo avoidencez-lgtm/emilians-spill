@@ -556,6 +556,12 @@
         state.bossTimer = 30;
         sfx.win();
       } else {
+        // Re-engage: the knockback flings the boss to the right, but the contact
+        // logic in update() zeroed its vx. Restore the approach speed so it walks
+        // back into punch range — otherwise it freezes off-screen-right, can never
+        // be hit the remaining times, and bossActive stays true forever (which also
+        // stops all elephant spawns). See README: "Trenger 3 slag for a forsvinne".
+        boss.vx = -50;
         flash('AU!', '#ffeb3b', 0.5);
       }
       hitSomething = true;
