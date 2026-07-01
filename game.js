@@ -453,12 +453,21 @@
 
     // ---- BOSS ----
     if (boss) {
-      boss.x += boss.knocked > 0 ? 240 * dt : boss.vx * dt;
-      if (boss.knocked > 0) boss.knocked -= dt;
-      if (boss.x < player.x + player.w + 6 && boss.knocked <= 0) {
-        boss.vx = 0;
+      if (boss.knocked > 0) {
+        // Flying back from a punch.
+        boss.knocked -= dt;
+        boss.x += 240 * dt;
+      } else if (boss.x > player.x + player.w + 6) {
+        // Walk back toward the player. We must NOT zero boss.vx permanently:
+        // if we did, a boss punched after it had planted would fly out of
+        // punch-reach and freeze there forever (hp stuck, elephant/boss
+        // spawns gated on !bossActive => the whole game soft-locks). Keeping
+        // the approach velocity lets it march back into reach every time, so
+        // all 3 hits can always land.
+        boss.x += boss.vx * dt;
+      } else {
+        // In melee range: plant and stomp, hurting the player on contact.
         boss.stomp += dt;
-        // when contact, hurt player periodically
         if (state.invuln <= 0 && rectsOverlap(player, boss)) hitPlayer();
       }
       if (boss.x > W + 200 || boss.x < -120) { boss = null; state.bossActive = false; state.bossTimer = 30; }
