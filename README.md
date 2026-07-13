@@ -36,6 +36,7 @@ Et HTML5-spill laget til Emilian (6 ar) av Hermes-flaten.
 - Du starter med 3 liv (pannekaker oppe til venstre).
 - Mister du alle, fa du en fin "Wow!"-skjerm med poengene dine — trykk for a spille igjen.
 - Slar du flere fiender pa rad far du COMBO-bonus.
+- **Beste poeng** huskes mellom omganger (og etter at du lukker spillet). Slar du rekorden far du en "NY REKORD!"-feiring, og "BESTE" vises pa startskjermen.
 
 ## Tekniske detaljer (for far)
 

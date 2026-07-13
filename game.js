@@ -179,6 +179,23 @@
   }
 
   // -------------------------------------------------------------------------
+  // PERSISTENCE  (beste poeng overlever reload via localStorage; degraderer
+  // trygt til minne-bare hvis storage er blokkert, f.eks. privat modus)
+  // -------------------------------------------------------------------------
+  const BEST_KEY = 'gorilla-rytter-best';
+  let bestScore = 0;
+  (function loadBest() {
+    try {
+      const v = parseInt(localStorage.getItem(BEST_KEY), 10);
+      if (Number.isFinite(v) && v > 0) bestScore = v;
+    } catch (e) { /* storage blokkert — behold minne-bare rekord */ }
+  })();
+  function saveBest() {
+    try { localStorage.setItem(BEST_KEY, String(bestScore)); }
+    catch (e) { /* ignorer — rekord spores fortsatt i minnet denne økta */ }
+  }
+
+  // -------------------------------------------------------------------------
   // GAME STATE
   // -------------------------------------------------------------------------
   let scene = 'TITLE'; // TITLE | PLAY | GAMEOVER
@@ -199,7 +216,8 @@
     footballNext: 60,
     superTime: 0,       // marshmallow super
     flashText: null,    // {text,timer,color}
-    cameraShake: 0
+    cameraShake: 0,
+    newRecord: false    // satt ved game-over hvis poengene slo forrige rekord
   };
   const player = {
     x: 80, y: GROUND_Y - 40,
@@ -237,6 +255,7 @@
     state.superTime = 0;
     state.flashText = null;
     state.cameraShake = 0;
+    state.newRecord = false;
     player.x = 80; player.y = GROUND_Y - 40;
     player.vy = 0; player.onGround = true; player.jumpsLeft = 2;
     player.punching = 0; player.punchCooldown = 0;
@@ -255,6 +274,11 @@
 
   function endGame() {
     scene = 'GAMEOVER';
+    if (state.score > bestScore) {
+      bestScore = state.score;
+      state.newRecord = true;
+      saveBest();
+    }
     sfx.win();
   }
 
@@ -1015,6 +1039,7 @@
     drawTextCentered('Trykk for a hoppe!', 100, palette.white, 10);
     drawTextCentered('Trykk SLÅ for a slass!', 118, palette.white, 10);
     drawTextCentered('Samle kokos og pannekaker!', 140, palette.white, 8);
+    if (bestScore > 0) drawTextCentered('BESTE: ' + bestScore, 162, '#ffd54f', 10);
     // pulsing
     const pulse = ((state.time * 2) | 0) % 2 === 0 ? '#ffffff' : '#ffeb3b';
     drawTextCentered('TRYKK FOR A SPILLE', 200, pulse, 12);
@@ -1027,6 +1052,12 @@
     drawTextCentered('WOW!', 50, '#ffeb3b', 26);
     drawTextCentered('Du fikk ' + state.score + ' poeng!', 100, palette.white, 12);
     drawTextCentered('Bra jobba, Emilian!', 130, '#ff7eb6', 10);
+    if (state.newRecord) {
+      const rp = ((state.time * 3) | 0) % 2 === 0 ? '#ffeb3b' : '#ff7eb6';
+      drawTextCentered('NY REKORD!', 156, rp, 12);
+    } else if (bestScore > 0) {
+      drawTextCentered('Beste: ' + bestScore, 158, '#ffd54f', 10);
+    }
     const pulse = ((state.time * 2) | 0) % 2 === 0 ? '#ffffff' : '#ffeb3b';
     drawTextCentered('SPILL IGJEN?', 190, pulse, 14);
     // sparkle particles auto-spawn for fun
