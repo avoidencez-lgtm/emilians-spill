@@ -1,5 +1,5 @@
 // Service worker — precache the game so it works offline
-const CACHE = 'gorilla-rytter-v1';
+const CACHE = 'gorilla-rytter-v2';
 const FILES = [
   './',
   './index.html',
