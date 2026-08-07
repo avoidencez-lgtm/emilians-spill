@@ -182,6 +182,22 @@
   // GAME STATE
   // -------------------------------------------------------------------------
   let scene = 'TITLE'; // TITLE | PLAY | GAMEOVER
+
+  // Persistent best score. localStorage can throw (private mode / disabled
+  // storage), so every access is guarded and simply degrades to no-memory.
+  const BEST_KEY = 'gorilla-rytter-best';
+  function loadBest() {
+    try {
+      const v = parseInt(localStorage.getItem(BEST_KEY), 10);
+      return Number.isFinite(v) && v > 0 ? v : 0;
+    } catch (e) { return 0; }
+  }
+  function saveBest(v) {
+    try { localStorage.setItem(BEST_KEY, String(v)); } catch (e) { /* ignore */ }
+  }
+  let bestScore = loadBest();
+  let newBest = false;   // true when the just-finished run beat the record
+
   const state = {
     time: 0,
     score: 0,
@@ -255,6 +271,8 @@
 
   function endGame() {
     scene = 'GAMEOVER';
+    newBest = state.score > bestScore;
+    if (newBest) { bestScore = state.score; saveBest(bestScore); }
     sfx.win();
   }
 
@@ -1015,6 +1033,7 @@
     drawTextCentered('Trykk for a hoppe!', 100, palette.white, 10);
     drawTextCentered('Trykk SLÅ for a slass!', 118, palette.white, 10);
     drawTextCentered('Samle kokos og pannekaker!', 140, palette.white, 8);
+    if (bestScore > 0) drawTextCentered('BESTE: ' + bestScore, 162, '#ffeb3b', 9);
     // pulsing
     const pulse = ((state.time * 2) | 0) % 2 === 0 ? '#ffffff' : '#ffeb3b';
     drawTextCentered('TRYKK FOR A SPILLE', 200, pulse, 12);
@@ -1027,6 +1046,12 @@
     drawTextCentered('WOW!', 50, '#ffeb3b', 26);
     drawTextCentered('Du fikk ' + state.score + ' poeng!', 100, palette.white, 12);
     drawTextCentered('Bra jobba, Emilian!', 130, '#ff7eb6', 10);
+    if (newBest) {
+      const rp = ((state.time * 3) | 0) % 2 === 0 ? '#ffeb3b' : '#ff7eb6';
+      drawTextCentered('NY REKORD!', 158, rp, 12);
+    } else if (bestScore > 0) {
+      drawTextCentered('BESTE: ' + bestScore, 158, '#ffeb3b', 9);
+    }
     const pulse = ((state.time * 2) | 0) % 2 === 0 ? '#ffffff' : '#ffeb3b';
     drawTextCentered('SPILL IGJEN?', 190, pulse, 14);
     // sparkle particles auto-spawn for fun
